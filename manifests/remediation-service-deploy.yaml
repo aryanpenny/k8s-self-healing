@@ -1,0 +1,72 @@
+# This file deploys the auto-heal webhook (remediation-service) in the monitoring namespace
+# and grants it permission to restart the 'demo-app' deployment in the 'default' namespace.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: remediation-sa
+  namespace: monitoring # The ServiceAccount lives in the monitoring namespace
+---
+# --- 1. RBAC (Permissions to perform the healing action) ---
+# Role needed to run 'kubectl rollout restart' on deployments
+apiVersion: rbac.authorization.k8s.io/v1    
+kind: Role
+metadata:
+  name: remediation-role
+  namespace: default # MUST be created in the target app's namespace
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "patch", "update"] # 'patch' and 'update' are needed for rollout restart
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: remediation-rolebinding
+  namespace: default # Binds the role in the default namespace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: remediation-role
+subjects:
+- kind: ServiceAccount
+  name: remediation-sa
+  namespace: monitoring # CRITICAL: Binds the SA from the monitoring namespace to the default role
+---
+# --- 2. DEPLOYMENT (The Auto-Heal Service) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remediation-service
+  namespace: monitoring # Alertmanager is in this namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: remediator }
+  template:
+    metadata:
+      labels: { app: remediator }
+    spec:
+      serviceAccountName: remediation-sa # Uses the SA we created above
+      containers:
+      - name: remediator
+        # FIX: Uses the locally loaded image name, not the external registry path
+        image: remediator-service:latest 
+        ports:
+        - containerPort: 8080
+        # FIX: CRITICAL for k3d pull issues - tells K8s NOT to look externally
+        imagePullPolicy: Never 
+---
+# --- 3. SERVICE (Internal Endpoint for Alertmanager) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: remediation-service
+  namespace: monitoring 
+spec:
+  selector: { app: remediator }
+  ports:
+  - port: 8080 # Service port
+    targetPort: 8080 # Container port
+    protocol: TCP
+  type: ClusterIP # Exposed internally for Alertmanager webhook call

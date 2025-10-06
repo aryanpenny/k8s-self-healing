@@ -6,7 +6,6 @@ metadata:
 spec:
   replicas: 3
   selector:
-    # Corrected 'matchLables' to 'matchLabels'
     matchLabels: { app: demo-app }
   template:
     metadata:
@@ -18,7 +17,6 @@ spec:
         args: ["-text=hello from demo"]
         ports: [{containerPort: 5678}]
         
-        # --- PROBES MUST BE INDENTED HERE ---
         readinessProbe:
           httpGet:
             path: /
@@ -28,9 +26,9 @@ spec:
         livenessProbe:
           httpGet:
             path: /
-            port: 5678 # Missing port and timing from your snippet
+            port: 5678
           initialDelaySeconds: 15
-          periodSeconds: 10
+          periodSeconds: 10 
 ---
 apiVersion: v1
 kind: Service

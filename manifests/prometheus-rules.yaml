@@ -1,0 +1,30 @@
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: demo-app-rules
+  namespace: monitoring 
+spec:
+  groups:
+  - name: demo.rules
+    rules:
+    - alert: PodRestartsHigh
+      expr: increase(kube_pod_container_status_restarts_total{pod=~"demo-app.*"}[5m]) > 2
+      for: 2m 
+      labels:
+        severity: critical
+       
+        remediation_target: deployment/demo-app 
+      annotations:
+        summary: "High restarts for demo-app"
+        description: "demo-app has restarted more than 2 times in 5 minutes."
+    
+    - alert: DeploymentUnavailable
+      expr: kube_deployment_status_replicas_unavailable{deployment="demo-app"} > 0
+      for: 1m 
+      labels:
+        severity: warning
+        remediation_target: deployment/demo-app
+      annotations:
+        summary: "Deployment has unavailable replicas"
+        description: "demo-app has unavailable replicas."
